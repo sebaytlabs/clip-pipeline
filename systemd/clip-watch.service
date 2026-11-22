@@ -1,0 +1,12 @@
+# Copy to ~/.config/systemd/user/, change the path to where you cloned this, then:
+#   systemctl --user daemon-reload && systemctl --user enable --now clip-watch.service
+[Unit]
+Description=Clip pipeline: turn finished OBS recordings into a full video, vertical clips and post texts
+
+[Service]
+ExecStart=%h/clip-pipeline/watch.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

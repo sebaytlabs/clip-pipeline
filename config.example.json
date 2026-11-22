@@ -1,0 +1,17 @@
+{
+  "root": "~/Videos/Clips",
+  "brand": {
+    "name": "My Channel",
+    "handle": "@mychannel",
+    "channel": "https://www.youtube.com/@mychannel",
+    "site": "https://example.com",
+    "link": "https://example.com/newsletter",
+    "hashtag": "mychannel"
+  },
+  "posting": "hold",
+  "post_time": "18:00",
+  "ahead_days": 7,
+  "buffer_key": "paste your Buffer API key here",
+  "channels": {"youtube": "buffer channel id", "instagram": "buffer channel id", "facebook": "buffer channel id"},
+  "hosting": {"type": "folder", "folder": "/var/www/clips", "base_url": "https://example.com/clips"}
+}
