@@ -35,7 +35,20 @@ A recording dropped in `recordings/<kind>/` is handled as that kind. Each kind g
 
 Encoding runs at the lowest priority and waits while OBS is recording, so a game you're recording never stutters.
 
-## Set up
+## The app
+
+```
+python3 clip_pipeline_app.py
+```
+
+The app has five pages:
+- **Start here:** a checklist of the setup, with a button to fix each missing part. It covers the programs it needs, your channel, the OBS setups and the background clip maker.
+- **My channel:** your name, @handle, links and hashtag.
+- **Record:** opens OBS on the right setup for gameplay, reading or screen videos. You can also make clips from a video you already have.
+- **Videos:** everything made so far, with the folder one click away and every caption ready to copy.
+- **Posting:** Buffer settings, an on/hold switch, and check or post now.
+
+## Set up by hand
 
 ```
 git clone https://github.com/sebaytlabs/clip-pipeline ~/clip-pipeline
