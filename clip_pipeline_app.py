@@ -103,8 +103,10 @@ class StartPage(Page):
                                             "not installed": "not installed", "unsupported": "needs Linux"}[w],
              None if w == "running" else ("Turn it on", self.turn_on)),
         ]
+        self.checklist = tk.Frame(self.body, bg=BG)
+        self.checklist.pack(fill="x")
         for name, ok, detail, action in items:
-            c = self.card()
+            c = self.card(self.checklist)
             tk.Label(c, text="✔" if ok else "•", bg=PANEL, fg="#2f9e44" if ok else ACCENT,
                      font=(FONT, 16, "bold"), width=2).pack(side="left", padx=(12, 4), pady=8)
             tk.Label(c, text=name, bg=PANEL, fg=FG, font=(FONT, 12, "bold"), width=18, anchor="w").pack(side="left")
@@ -147,12 +149,14 @@ class ChannelPage(Page):
         b = c["brand"]
         self.title("My channel", "Your name and links, printed on every thumbnail and clip and used in every caption.")
         self.vars = {}
+        self.fields = tk.Frame(self.body, bg=BG)
+        self.fields.pack(fill="x")
         for key, label, hint in (("name", "Channel name", "on thumbnails"), ("handle", "Handle", "like @mychannel"),
                                  ("channel", "YouTube link", "https://www.youtube.com/@…"),
                                  ("site", "Website", "optional"), ("link", "Main link", "optional: the one thing to "
                                                                                        "click"),
                                  ("hashtag", "Your hashtag", "without the #")):
-            r = self.row()
+            r = self.row(self.fields)
             tk.Label(r, text=label, bg=BG, fg=FG, font=(FONT, 11), width=16, anchor="w").pack(side="left")
             v = tk.StringVar(value=b.get(key, ""))
             tk.Entry(r, textvariable=v, font=(FONT, 11), relief="solid", bd=1, width=44).pack(side="left", ipady=4)
@@ -161,7 +165,8 @@ class ChannelPage(Page):
         self.root = tk.StringVar(value=c["root"])
         self.path_field("Videos folder", self.root)
         r = self.row(pady=12)
-        self.button(r, "Save", self.save).pack(side="left")
+        self.save_btn = self.button(r, "Save", self.save)
+        self.save_btn.pack(side="left")
         self.button(r, "Remake the reading banner", self.banner, primary=False).pack(side="left", padx=8)
         self.msg = self.text("", 11, DIM)
 
@@ -170,6 +175,9 @@ class ChannelPage(Page):
         brand["hashtag"] = brand["hashtag"].lstrip("#")
         if brand["handle"] and not brand["handle"].startswith("@"):
             brand["handle"] = "@" + brand["handle"]
+        if brand["hashtag"] in ("", config.DEFAULTS["brand"]["hashtag"]) and brand["handle"] not in ("", "@mychannel"):
+            brand["hashtag"] = brand["handle"].lstrip("@")      # your own tag follows your handle until you pick one
+            self.vars["hashtag"].set(brand["hashtag"])
         save_config({"brand": brand, "root": self.root.get()})
         self.banner(quiet=True)
         self.msg.config(text=f"Saved to {config.CONFIG}. The reading banner was remade with your name.")
@@ -197,8 +205,10 @@ class RecordPage(Page):
         self.steps(["First time only: close OBS and press Set up OBS.",
                     "Press the kind of video below. OBS opens ready.",
                     "Record. When you stop, type the video's name in the box that pops up."])
+        self.kinds = tk.Frame(self.body, bg=BG)
+        self.kinds.pack(fill="x")
         for key, name, what in KINDS:
-            c = self.card()
+            c = self.card(self.kinds)
             tk.Label(c, text=name, bg=PANEL, fg=FG, font=(FONT, 13, "bold"), width=10, anchor="w").pack(side="left",
                                                                                                     padx=14, pady=10)
             tk.Label(c, text=what, bg=PANEL, fg=DIM, font=(FONT, 11)).pack(side="left")
@@ -210,7 +220,13 @@ class RecordPage(Page):
         self.enc.current(0)
         self.enc.pack(side="left", padx=8)
         self.button(r, "Set up OBS", self.setup, primary=False).pack(side="left")
-        self.button(r, "Make clips from a file I already have…", self.from_file, primary=False).pack(side="right")
+        self.file_btn = self.button(r, "Make clips from a file I already have…", self.from_file, primary=False)
+        self.file_btn.pack(side="right")
+        r = self.row()
+        self.sample_btn = self.button(r, "Try it with a sample video", self.sample, primary=False)
+        self.sample_btn.pack(side="left")
+        tk.Label(r, text="makes a 75-second test video and turns it into clips, so you can see what you get",
+                 bg=BG, fg=DIM, font=(FONT, 10)).pack(side="left", padx=8)
         self.log = self.log_box(6)
 
     def record(self, kind):
@@ -231,6 +247,33 @@ class RecordPage(Page):
         write(self.log, (r.stdout + r.stderr).strip() + "\n")
         if r.returncode == 0:
             write(self.log, "OBS is set up. The three Record buttons are also in your app menu.\n")
+
+    def make(self, f, kind, name):
+        """Copy f into the pipeline and make its clips in the background."""
+        copy = Path(config.root()) / "named" / Path(f).name
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, copy)   # process.py moves its input; your original stays where it was
+        write(self.log, f"Making clips for '{name}'. This takes a minute or more…\n")
+        Job(self, self.log, lambda log: subprocess.run([sys.executable, str(HERE / "process.py"), str(copy), kind,
+                                                        name], capture_output=True, text=True),
+            lambda r: write(self.log, ("Done. See it on the Videos page." if getattr(r, "returncode", 1) == 0
+                                       else f"Problem: {getattr(r, 'stderr', r)}") + "\n"))
+
+    def sample(self):
+        if not shutil.which("ffmpeg"):
+            messagebox.showinfo("Sample", "This needs ffmpeg: sudo apt install ffmpeg")
+            return
+        import tempfile
+        f = Path(tempfile.gettempdir()) / "clip-pipeline-sample.mp4"
+        write(self.log, "Making a 75-second test video…\n")
+        brand = config.load()["brand"]["name"]
+
+        def work(log):
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30",
+                            "-f", "lavfi", "-i", "sine=frequency=330", "-t", "75", "-c:v", "libx264", "-preset",
+                            "veryfast", "-c:a", "aac", "-shortest", str(f)], check=True)
+        Job(self, self.log, work, lambda r: write(self.log, f"Couldn't make it: {r}\n") if isinstance(
+            r, BaseException) else self.make(f, "general", f"Sample video for {brand}"))
 
     def from_file(self):
         f = filedialog.askopenfilename(filetypes=[("Video", "*.mp4 *.mkv *.mov")])
@@ -254,14 +297,7 @@ class RecordPage(Page):
             if not n:
                 return
             top.destroy()
-            copy = Path(config.root()) / "named" / Path(f).name
-            copy.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(f, copy)   # process.py moves its input; your original stays where it was
-            write(self.log, f"Making clips for '{n}'. This takes a few minutes…\n")
-            Job(self, self.log, lambda log: subprocess.run([sys.executable, str(HERE / "process.py"), str(copy), k, n],
-                                                           capture_output=True, text=True),
-                lambda r: write(self.log, ("Done: " + r.stdout.strip() if getattr(r, "returncode", 1) == 0
-                                           else f"Problem: {getattr(r, 'stderr', r)}") + "\n"))
+            self.make(f, k, n)
         self.button(top, "Make the clips", go).pack(anchor="e", pady=8)
 
 
@@ -293,7 +329,8 @@ class VideosPage(Page):
             tk.Label(c, text=p["title"], bg=PANEL, fg=FG, font=(FONT, 12, "bold"), anchor="w").pack(fill="x", padx=14,
                                                                                                  pady=(8, 0))
             tk.Label(c, text=f"{p['made']}  ·  {p['kind']}  ·  {round(p['seconds'] / 60)} min  ·  "
-                             f"{len(p['shorts'])} clips", bg=PANEL, fg=DIM, font=(FONT, 10), anchor="w").pack(
+                             + (f"{len(p['shorts'])} clip{'' if len(p['shorts']) == 1 else 's'}" if p['shorts'] else "clips still being made"),
+                 bg=PANEL, fg=DIM, font=(FONT, 10), anchor="w").pack(
                 fill="x", padx=14)
             r = tk.Frame(c, bg=PANEL)
             r.pack(fill="x", padx=10, pady=8)
@@ -356,8 +393,9 @@ class PostingPage(Page):
                      show="•" if secret else "").pack(side="left", ipady=3)
             self.vars[key] = v
         self.on = tk.BooleanVar(value=c.get("posting") == "on")
-        tk.Checkbutton(self.body, text="Posting is ON (untick to put everything on hold)", variable=self.on, bg=BG,
-                       font=(FONT, 11, "bold")).pack(anchor="w", pady=8)
+        self.switch = tk.Checkbutton(self.body, text="Posting is ON (untick to put everything on hold)",
+                                     variable=self.on, bg=BG, font=(FONT, 11, "bold"))
+        self.switch.pack(anchor="w", pady=8)
         r = self.row()
         self.button(r, "Save", self.save).pack(side="left")
         self.button(r, "Check what's been posted", lambda: self.run(["--check"]), primary=False).pack(side="left",
@@ -384,6 +422,50 @@ class PostingPage(Page):
                                                            capture_output=True, text=True).stdout or "Nothing to report."))
 
 
+def tutorial(app):
+    pg = app.page
+    log = lambda: pg("record").log.get("1.0", "end")
+    return [
+        {"title": "Welcome to Clip Pipeline", "target": lambda: app.tour_button,
+         "text": "One person can't edit a video five ways for five sites every day. Clip Pipeline does that part. You "
+                 "record and type the video's name. You get the full video, vertical clips for Shorts and Reels, a "
+                 "thumbnail, and the title, description and hashtags for each site.\n\nAbout four minutes.",
+         "do": "click Next."},
+        {"title": "Start here: the checklist", "page": "start", "target": lambda: pg("start").checklist,
+         "text": "Each line is one part of the setup, with a button to fix it if it's missing. You work down it once. "
+                 "After that you only use Record and Videos.",
+         "do": "read the list, then click Next."},
+        {"title": "Your channel", "page": "channel", "target": lambda: pg("channel").fields,
+         "text": "Your name goes on every thumbnail and your @handle under every clip. Your links and hashtag go "
+                 "into every caption. Type them once here.",
+         "do": "type your channel's name (and your @handle if you have one), then click Save.",
+         "check": lambda _: config.load()["brand"]["name"] not in ("", "My Channel")},
+        {"title": "Three kinds of video", "page": "record", "target": lambda: pg("record").kinds,
+         "text": "Gameplay records the screen and the game's sound. Reading is your camera over a banner, with no "
+                 "sound. Screen is the screen with a small camera in the corner. Each kind gets its own clips and "
+                 "wording. 'Set up OBS' makes all three in OBS for you.",
+         "do": "click Next. You'll set up OBS when you're ready to record."},
+        {"title": "See it work", "page": "record", "target": lambda: pg("record").sample_btn,
+         "text": "This makes a 75-second test video and runs it through the same steps a real recording goes "
+                 "through.",
+         "do": "click Try it with a sample video.", "start": log,
+         "check": lambda old: log().strip() != old.strip()},
+        {"title": "Videos", "page": "videos", "target": lambda: pg("videos").body,
+         "text": "Everything made so far, newest first. The sample shows up here in a minute or two. Open folder "
+                 "shows the full video, the clips and the thumbnail. Captions shows the text for each site, with a "
+                 "Copy button.",
+         "do": "come back to this page in a couple of minutes to see the sample. Click Next."},
+        {"title": "Posting (optional)", "page": "posting", "target": lambda: pg("posting").switch,
+         "text": "If you want it, one clip a day goes out on each site through Buffer, a scheduling service with a "
+                 "free plan. It stays on hold until you tick this box, so nothing is posted by surprise.",
+         "do": "leave it on hold for now. Click Next."},
+        {"title": "You're ready", "target": lambda: app.tour_button,
+         "text": "Work down Start here once. After that it's: Record, stop, type the name. The rest happens in the "
+                 "background.\n\nPress F1 on any page for help with that page.",
+         "do": "click Done."},
+    ]
+
+
 def main():
     app = App("Clip Pipeline", "Record once. Post everywhere.", ACCENT, ABOUT, class_name="ClipPipeline")
     app.add_page("start", "Start here", StartPage)
@@ -393,6 +475,7 @@ def main():
     app.add_page("posting", "Posting", PostingPage)
     if (HERE / "icon.png").exists():
         app.iconphoto(True, tk.PhotoImage(file=str(HERE / "icon.png")))
+    app.set_tutorial(lambda: tutorial(app), Path(config.CONFIG).parent / "app.json")
     app.run("start")
 
 

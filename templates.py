@@ -45,7 +45,8 @@ def links(b):
 
 
 def where_full(b):
-    return b["channel"] or "my channel"
+    """Where the full video lives: the YouTube link, or the handle ("on YouTube @me") when no link is set."""
+    return b["channel"] or f"on YouTube {b['handle']}"
 
 
 def gameplay(name, b):
@@ -125,7 +126,7 @@ def general(name, b):
         "youtube": {"title": clip(t, 100), "description": f"{t}\n\n{links(b)}\n\n#{me}", "tags": [t, b["name"]]},
         "short": {"title": clip(t, 90) + " #shorts", "description": f"{t}\n\n#{me} #Shorts"},
         "instagram": f"{t}\n\nLink in bio.\n\n#{me}",
-        "facebook": f"{t}\n\n{b['site'] or where_full(b)}\n\n#{me}",
+        "facebook": f"{t}\n\n{b['site'] or b['channel'] or b['handle']}\n\n#{me}",
         "overlay": t,
     }
 
@@ -134,7 +135,16 @@ def texts(kind, name, brand=None):
     b = brand or config.load()["brand"]
     out = {"gameplay": gameplay, "reading": reading, "screen": screen}.get(kind, general)(name, b)
     out["kind"], out["category"] = kind, KINDS.get(kind, KINDS["general"])[1]
-    return out
+    return tidy(out)
+
+
+def tidy(x):
+    """Links you haven't set leave empty lines behind: never more than one blank line in a row."""
+    if isinstance(x, dict):
+        return {k: tidy(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [tidy(v) for v in x]
+    return re.sub(r"\n{3,}", "\n\n", x).strip() if isinstance(x, str) else x
 
 
 if __name__ == "__main__":  # python3 templates.py: a look at each

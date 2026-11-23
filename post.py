@@ -284,5 +284,7 @@ if __name__ == "__main__":
     try:
         import status
         status.build(missing)
+    except ImportError:
+        print("(The status spreadsheet needs openpyxl: pip install openpyxl. Everything else still works.)")
     except Exception as e:  # the spreadsheet is a convenience; never let it stop posting
         print("(spreadsheet not rebuilt:", e, ")")
