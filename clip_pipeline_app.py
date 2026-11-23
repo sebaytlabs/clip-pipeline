@@ -17,7 +17,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 import config
-from appkit import BG, DIM, FG, FONT, LINE, PANEL, App, Capture, Job, Page, open_path, write
+from appkit import BG, DIM, FG, FONT, LINE, PANEL, App, Job, Page, open_path, write
 
 ACCENT = "#c2255c"
 HERE = Path(__file__).resolve().parent
