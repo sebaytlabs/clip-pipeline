@@ -47,6 +47,21 @@ def duration(path):
     return float(out or 0)
 
 
+def size(path):
+    """(width, height) of the first video stream; 1920x1080 if ffprobe can't tell."""
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+               "-of", "csv=p=0:s=x", path]).stdout.strip()
+    try:
+        w, h = (int(x) for x in out.split("x")[:2])
+        return (w, h) if w > 0 and h > 0 else (1920, 1080)
+    except ValueError:
+        return 1920, 1080
+
+
+# A reading session keeps the middle 4:3 of the frame (the camera's part), whatever the recording's size.
+READING_CROP = "crop=w='min(iw,ih*4/3)':h=ih"
+
+
 def recording_now(root=RECORDINGS, within=20):
     """True while OBS is writing a recording (a file there changed in the last few seconds)."""
     now = time.time()
@@ -89,22 +104,27 @@ def overlay_file(folder, text):
     return path, len(lines)
 
 
-def vertical_filter(kind, title_file, lines, speed=1.0):
-    """16:9 in, 1080x1920 out: the picture whole over a blurred copy of itself, the title above it and the
-    handle below. A reading session uses the camera's part of the frame, so the book fills the width."""
+def vertical_filter(kind, title_file, lines, speed=1.0, dims=(1920, 1080)):
+    """Any size in (dims: the recording's width and height), 1080x1920 out: the picture whole over a blurred copy
+    of itself, the title above it and the handle below. A reading session uses the camera's part of the frame,
+    so the book fills the width."""
     # sped up: keep one frame in every `speed` before anything else, so the blur and overlay only work on those
     lapse = f"select='not(mod(n,{max(2, round(speed))}))',setpts=N/(30*TB)," if speed > 1 else ""
-    src = f"[0:v]{lapse}" + ("crop=1440:1080:240:0" if kind == "reading" else "null")
-    pic_h = 810 if kind == "reading" else 608
+    src = f"[0:v]{lapse}" + (READING_CROP if kind == "reading" else "null")
+    w, h = dims
+    if kind == "reading":
+        w = min(w, h * 4 / 3)
+    pic_h = min(1920, round(1080 * h / w / 2) * 2)  # 608 for 16:9, 810 for the 4:3 reading crop
     top = (1920 - pic_h) // 2
     ty = max(60, top - 60 - lines * 78)
+    handle_y = min(1920 - 90, top + pic_h + 46)  # a tall picture: the handle sits over its bottom edge
     return (f"{src},split[a][b];"
             "[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=30:5,eq=brightness=-0.12[bg];"
             "[b]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,"
             f"drawtext=fontfile={FONT}:textfile='{title_file}':fontcolor=white:fontsize=64:line_spacing=14:"
             f"borderw=4:bordercolor=black@0.85:x=(w-text_w)/2:y={ty},"
             f"drawtext=fontfile={FONT}:text='{handle()}':fontcolor=white@0.9:fontsize=40:borderw=3:"
-            f"bordercolor=black@0.8:x=(w-text_w)/2:y={top + pic_h + 46},format=yuv420p")
+            f"bordercolor=black@0.8:x=(w-text_w)/2:y={handle_y},format=yuv420p")
 
 
 def handle():
@@ -125,21 +145,22 @@ def encode(src, out, vf, start=None, length=None, audio=True):
 
 def make_shorts(src, folder, kind, overlay, total):
     title_file, lines = overlay_file(folder, overlay)
+    dims = size(src)
     made = []
     if kind == "reading":
         speed = max(1.0, total / LAPSE_S)
         if speed > 1.5:  # the whole sitting in under a minute
             out = os.path.join(folder, f"short_{len(made) + 1:02d}.mp4")
-            encode(src, out, vertical_filter(kind, title_file, lines, speed), audio=False)
+            encode(src, out, vertical_filter(kind, title_file, lines, speed, dims), audio=False)
             made.append((out, f"sped up {speed:.0f}x"))
         mid = max(0.0, total / 2 - 22)
         out = os.path.join(folder, f"short_{len(made) + 1:02d}.mp4")
-        encode(src, out, vertical_filter(kind, title_file, lines), start=mid, length=min(45, total), audio=False)
+        encode(src, out, vertical_filter(kind, title_file, lines, dims=dims), start=mid, length=min(45, total), audio=False)
         made.append((out, "real time"))
     else:
         for s in starts(total, kind):
             out = os.path.join(folder, f"short_{len(made) + 1:02d}.mp4")
-            encode(src, out, vertical_filter(kind, title_file, lines), start=s, length=min(CLIP_S, total))
+            encode(src, out, vertical_filter(kind, title_file, lines, dims=dims), start=s, length=min(CLIP_S, total))
             made.append((out, f"from {int(s // 60)}:{int(s % 60):02d}"))
     os.remove(title_file)
     return made
@@ -149,7 +170,8 @@ def thumbnail(src, folder, kind, title, total):
     """A frame from a quarter of the way in, darkened at the bottom, with the title on it."""
     from PIL import Image, ImageDraw, ImageFont
     raw = os.path.join(folder, ".frame.jpg")
-    crop = "crop=1440:1080:240:0,scale=1280:-2,crop=1280:720" if kind == "reading" else "scale=1280:720"
+    fill = "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720"  # never stretched, any size
+    crop = f"{READING_CROP},{fill}" if kind == "reading" else fill
     run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{min(total * 0.25, max(0, total - 1)):.2f}", "-i", src,
          "-frames:v", "1", "-vf", crop, "-q:v", "2", raw])
     img = Image.open(raw).convert("RGB")
