@@ -31,11 +31,16 @@ import templates  # noqa: E402
 
 ROOT = config.root()
 READY, RECORDINGS = os.path.join(ROOT, "ready"), os.path.join(ROOT, "recordings")
-FONT = os.environ.get("CLIP_FONT", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+FONTS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",          # Debian, Ubuntu, Mint
+         "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",       # Fedora
+         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",            # macOS
+         "C:/Windows/Fonts/arialbd.ttf"]
+FONT = os.environ.get("CLIP_FONT") or next((f for f in FONTS if os.path.exists(f)), FONTS[0])
 CLIP_S = 58          # under a minute: fits Shorts, Reels and Facebook Reels alike
 LAPSE_S = 45         # how long a sped-up reading session runs
 PLAN = {"gameplay": (6, 120), "screen": (4, 90), "general": (4, 90)}  # kind: (most clips, one clip per this many seconds)
-NICE = ["nice", "-n", "19", "ionice", "-c", "3"]
+# lowest CPU and disk priority where the system has the tools (ionice is Linux only; Windows has neither)
+NICE = (["nice", "-n", "19"] if shutil.which("nice") else []) + (["ionice", "-c", "3"] if shutil.which("ionice") else [])
 
 
 def run(cmd, quiet=True):
@@ -121,10 +126,15 @@ def vertical_filter(kind, title_file, lines, speed=1.0, dims=(1920, 1080)):
     return (f"{src},split[a][b];"
             "[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=30:5,eq=brightness=-0.12[bg];"
             "[b]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,"
-            f"drawtext=fontfile={FONT}:textfile='{title_file}':fontcolor=white:fontsize=64:line_spacing=14:"
+            f"drawtext=fontfile='{ff_path(FONT)}':textfile='{title_file}':fontcolor=white:fontsize=64:line_spacing=14:"
             f"borderw=4:bordercolor=black@0.85:x=(w-text_w)/2:y={ty},"
-            f"drawtext=fontfile={FONT}:text='{handle()}':fontcolor=white@0.9:fontsize=40:borderw=3:"
+            f"drawtext=fontfile='{ff_path(FONT)}':text='{handle()}':fontcolor=white@0.9:fontsize=40:borderw=3:"
             f"bordercolor=black@0.8:x=(w-text_w)/2:y={handle_y},format=yuv420p")
+
+
+def ff_path(p):
+    """A path inside a quoted ffmpeg filter option: forward slashes, and ':' and quotes escaped (C:/ on Windows)."""
+    return p.replace("\\", "/").replace("'", "'\\''").replace(":", "\\:")
 
 
 def handle():
