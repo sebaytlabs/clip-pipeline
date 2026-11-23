@@ -1,3 +1,5 @@
+<img src="icon.svg" alt="" width="112" align="right">
+
 # Clip Pipeline
 
 **Record once. Get the full video, vertical clips, a thumbnail and every caption, made for you.**
