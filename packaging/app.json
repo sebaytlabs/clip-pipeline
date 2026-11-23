@@ -1,0 +1,7 @@
+{
+  "name": "Clip Pipeline",
+  "id": "clip-pipeline",
+  "entry": "clip_pipeline_app.py",
+  "tests": ["{python} -m unittest discover tests"],
+  "downloads": []
+}
