@@ -123,6 +123,7 @@ Now **Record Gameplay**, **Record Reading** and **Record Screen** are in your ap
 
 - **Wording:** all of it lives in `templates.py`, one function per kind. Change it there.
 - **Brand details** come from `config.json`: channel name, @handle, YouTube link, site, the one link you want clicked, and your own hashtag.
+- **Font:** a bold DejaVu or Arial is found by itself. Set `CLIP_FONT=/path/to/font.ttf` to use your own.
 
 ## Posting (optional)
 
@@ -168,7 +169,7 @@ python3 templates.py          # prints every kind's texts so you can read them
 ## Limits, plainly
 
 - **Clips are evenly spaced, not chosen.** A 30-minute game gives up to six clips spread across it. Some will be better than others. Make clips by hand from a file when one moment matters.
-- **Linux with X11** for the recorder and the watcher. The clip maker itself (`process.py`) only needs ffmpeg and Python, and works anywhere.
+- **Linux with X11** for the recorder and the watcher. The clip maker itself (`process.py`) only needs ffmpeg, Python and Pillow, and runs on Linux and Mac too (Windows should work but hasn't been tried). It takes recordings of any size and shape: 720p, 4K and vertical phone videos are fitted, never stretched.
 - **Posting needs Buffer** and somewhere public to host each clip briefly (a web folder or a Shopify store's Files). Without that, you post yourself using the captions it wrote.
 - **Platform rules change.** Clip lengths, caption limits and API rules are current as of 2026. Check them before you rely on them.
 

@@ -7,7 +7,6 @@ import math
 import sys
 from pathlib import Path
 
-import sys
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent))
 import config  # noqa: E402
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
