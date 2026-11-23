@@ -45,7 +45,7 @@ class Process(unittest.TestCase):
 
     def test_vertical_filter_fits_any_size(self):
         hd = process.vertical_filter("gameplay", "/tmp/t.txt", 1)
-        self.assertIn("y=1402", hd)  # 16:9: picture 608 high, handle 46 below it
+        self.assertIn("y=1310", hd)  # 16:9: picture 608 high from 656, handle 46 below it (as before)
         self.assertNotIn("1440:1080", process.vertical_filter("reading", "/tmp/t.txt", 1, dims=(1280, 720)))
         tall = process.vertical_filter("gameplay", "/tmp/t.txt", 2, dims=(1080, 1920))
         self.assertIn("y=1830", tall)  # a vertical video fills the frame: the handle stays on screen
